@@ -4,6 +4,8 @@
 #include <set>
 #include <functional>
 #include <vector>
+#include <thread>
+#include <chrono>
 
 #define M_PI           3.14159265358979323846 
 
@@ -31,7 +33,7 @@ struct Spec
 	std::multimap<double, std::set<Point>::iterator> Rmap;
 };
 
-Point GSA(std::function<double(double)> foo, double a, double b, double r = 2, double epsilon = 0.00001, int N = 10000)
+void GSA(std::function<double(double)> foo, double a, double b, double r, double epsilon, int N, Point& point)
 {
 	std::set<Point> w;
 	w.insert(Point(a, foo(a)));
@@ -46,16 +48,16 @@ Point GSA(std::function<double(double)> foo, double a, double b, double r = 2, d
 	double R = m * (b - a) + (foo(b) - foo(a)) * (foo(b) - foo(a)) / (m * (b - a)) - 2 * (foo(b) - foo(a));
 	spec.Rmap.insert(std::make_pair(R, ++w.begin()));
 	int n = 0;
-	while (((t.x() - t_1.x()) > epsilon) && (n < N))
+	while ((n < N))
 	{
 		n++;
 
-		// Проведение испытания 
+		// I?iaaaaiea eniuoaiey 
 		double x = 0.5 * (t.x() + t_1.x()) - (t.z() - t_1.z()) / (2 * m);
 		double z = foo(x);
 		res = z < res.z() ? Point(x, z) : res;
 
-		// Вставка в w новой точки
+		// Anoaaea a w iiaie oi?ee
 		auto insert_return = w.insert(Point(x, z));
 
 		std::set<Point>::iterator new_elem = insert_return.first;
@@ -64,13 +66,12 @@ Point GSA(std::function<double(double)> foo, double a, double b, double r = 2, d
 		std::set<Point>::iterator after_new_elem = ++new_elem;
 		new_elem--;
 
-		// Вычисление M
+		// Au?eneaiea M
 		spec.Mset.erase(abs((after_new_elem->z() - before_new_elem->z()) / (after_new_elem->x() - before_new_elem->x())));
 		spec.Mset.insert(abs((after_new_elem->z() - new_elem->z()) / (after_new_elem->x() - new_elem->x())));
 		spec.Mset.insert(abs((new_elem->z() - before_new_elem->z()) / (new_elem->x() - before_new_elem->x())));
 		if (M == *(--spec.Mset.end()))
 		{
-			// Вычисление R
 			spec.Rmap.erase(m * (after_new_elem->x() - before_new_elem->x()) + (after_new_elem->z() - before_new_elem->z())
 				* (after_new_elem->z() - before_new_elem->z()) / (m * (after_new_elem->x() - before_new_elem->x()))
 				- 2 * (after_new_elem->z() - before_new_elem->z()));
@@ -85,7 +86,6 @@ Point GSA(std::function<double(double)> foo, double a, double b, double r = 2, d
 		}
 		else
 		{
-			// пересчет R
 			spec.Rmap.clear();
 			M = *(--spec.Mset.end());
 			m = (M > 0) ? r * M : 1;
@@ -100,16 +100,45 @@ Point GSA(std::function<double(double)> foo, double a, double b, double r = 2, d
 			}
 		}
 
-		// Нахождение интервала с максимальным R 
-		std::set<Point>::iterator ti = (--spec.Rmap.end())->second; // если R одинаковые?
+		std::set<Point>::iterator ti = (--spec.Rmap.end())->second; 
 		t.setx(ti->x());
 		t.setz(ti->z());
 		ti--;
 		t_1.setx(ti->x());
 		t_1.setz(ti->z());
 	}
+	point = res;
+}
+
+Point GlobalSearchAlgo(std::function<double(double)> foo, double a, double b, double r = 2, double epsilon = 0.00001, int N = 10000)
+{
+	int n_thread = 4;
+	std::vector<std::thread> threads(n_thread);
+	double distance = abs(b - a);
+	double start = a, end = a + distance / n_thread;
+	std::vector<Point> points(n_thread);
+	int i = 0;
+	for (auto it = std::begin(threads); it != std::end(threads); ++it) {
+
+		*it = std::thread(GSA, foo, start, end, r, epsilon, N / n_thread, std::ref(points[i]));
+		start = end;
+		if (i == n_thread - 2)
+			end = b;
+		else
+		end += distance / n_thread;
+		i++;
+	}
+	for (auto&& i : threads) {
+		i.join();
+	}
+	Point res = points[0];
+	for (int j = 1; j < n_thread; j++)
+		if (points[j].z() < res.z())
+			res = points[j];
+
 	return res;
 }
+
 
 double foo1(double x)
 {
@@ -165,7 +194,7 @@ int main(int argc, char* argv[])
 {
 	std::vector<std::function<double(double)>> functions({ foo1, foo2, foo3, foo4, foo5, foo6, foo7, foo8, foo9 });
 	Point point;
-	std::function<double(double)> foo = foo1;
+	std::function<double(double)> foo = foo2;
 	double a = -3;
 	double b = 3;
 	if (argc > 1)
@@ -199,8 +228,12 @@ int main(int argc, char* argv[])
 			}
 		}
 	}
-	point = GSA(foo2, a, b, 2);
+	auto start = std::chrono::system_clock::now();
+	
+	point = GlobalSearchAlgo(foo1, 2.7, 7.5, 2, 0.0000001, 10000);
+	auto end = std::chrono::system_clock::now();
+	auto time = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+	std::cout << "time = " << time << std::endl;
 	std::cout << "x = " << point.x() << std::endl << "z = " << point.z();
 	return 0;
 }
-
