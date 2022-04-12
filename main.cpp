@@ -4,8 +4,10 @@
 #include <set>
 #include <functional>
 #include <vector>
+#include <chrono>
+#include <omp.h>
 
-#define M_PI           3.14159265358979323846 
+#define M_PI           3.14159265358979323846
 
 class Point
 {
@@ -30,8 +32,8 @@ struct Spec
 	std::multiset<double> Mset;
 	std::multimap<double, std::set<Point>::iterator> Rmap;
 };
-
-Point GSA(std::function<double(double)> foo, double a, double b, double r = 2, double epsilon = 0.00001, int N = 10000)
+int n = 0;
+Point GSA(std::function<double(double)> foo, double a, double b, double r = 2.0, double epsilon = 0.001, int N = 1000)
 {
 	std::set<Point> w;
 	w.insert(Point(a, foo(a)));
@@ -43,19 +45,16 @@ Point GSA(std::function<double(double)> foo, double a, double b, double r = 2, d
 	double M = abs((foo(b) - foo(a)) / (b - a));
 	spec.Mset.insert(M);
 	double m = (M > 0) ? r * M : 1;
-	double R = m * (b - a) + (foo(b) - foo(a)) * (foo(b) - foo(a)) / (m * (b - a)) - 2 * (foo(b) - foo(a));
+	double R = (m * (b - a)) + ((foo(b) - foo(a)) * (foo(b) - foo(a)) / (m * (b - a))) - 2 * (foo(b) + foo(a));
 	spec.Rmap.insert(std::make_pair(R, ++w.begin()));
-	int n = 0;
 	while (((t.x() - t_1.x()) > epsilon) && (n < N))
 	{
 		n++;
 
-		// Проведение испытания 
 		double x = 0.5 * (t.x() + t_1.x()) - (t.z() - t_1.z()) / (2 * m);
 		double z = foo(x);
 		res = z < res.z() ? Point(x, z) : res;
 
-		// Вставка в w новой точки
 		auto insert_return = w.insert(Point(x, z));
 
 		std::set<Point>::iterator new_elem = insert_return.first;
@@ -64,28 +63,25 @@ Point GSA(std::function<double(double)> foo, double a, double b, double r = 2, d
 		std::set<Point>::iterator after_new_elem = ++new_elem;
 		new_elem--;
 
-		// Вычисление M
 		spec.Mset.erase(abs((after_new_elem->z() - before_new_elem->z()) / (after_new_elem->x() - before_new_elem->x())));
 		spec.Mset.insert(abs((after_new_elem->z() - new_elem->z()) / (after_new_elem->x() - new_elem->x())));
 		spec.Mset.insert(abs((new_elem->z() - before_new_elem->z()) / (new_elem->x() - before_new_elem->x())));
 		if (M == *(--spec.Mset.end()))
 		{
-			// Вычисление R
 			spec.Rmap.erase(m * (after_new_elem->x() - before_new_elem->x()) + (after_new_elem->z() - before_new_elem->z())
 				* (after_new_elem->z() - before_new_elem->z()) / (m * (after_new_elem->x() - before_new_elem->x()))
-				- 2 * (after_new_elem->z() - before_new_elem->z()));
+				- 2 * (after_new_elem->z() + before_new_elem->z()));
 
 			spec.Rmap.insert(std::make_pair(m * (after_new_elem->x() - new_elem->x()) + (after_new_elem->z() - new_elem->z())
 				* (after_new_elem->z() - new_elem->z()) / (m * (after_new_elem->x() - new_elem->x()))
-				- 2 * (after_new_elem->z() - new_elem->z()), after_new_elem));
+				- 2 * (after_new_elem->z() + new_elem->z()), after_new_elem));
 
 			spec.Rmap.insert(std::make_pair(m * (new_elem->x() - before_new_elem->x()) + (new_elem->z() - before_new_elem->z())
 				* (new_elem->z() - before_new_elem->z()) / (m * (new_elem->x() - before_new_elem->x()))
-				- 2 * (new_elem->z() - before_new_elem->z()), new_elem));
+				- 2 * (new_elem->z() + before_new_elem->z()), new_elem));
 		}
 		else
 		{
-			// пересчет R
 			spec.Rmap.clear();
 			M = *(--spec.Mset.end());
 			m = (M > 0) ? r * M : 1;
@@ -96,12 +92,11 @@ Point GSA(std::function<double(double)> foo, double a, double b, double r = 2, d
 				std::set<Point>::iterator i_1 = --i;
 				i++;
 				spec.Rmap.insert(std::make_pair(m * (i->x() - i_1->x()) + (i->z() - i_1->z())
-					* (i->z() - i_1->z()) / (m * (i->x() - i_1->x())) - 2 * (i->z() - i_1->z()), i));
+					* (i->z() - i_1->z()) / (m * (i->x() - i_1->x())) - 2 * (i->z() + i_1->z()), i));
 			}
 		}
 
-		// Нахождение интервала с максимальным R 
-		std::set<Point>::iterator ti = (--spec.Rmap.end())->second; // если R одинаковые?
+		std::set<Point>::iterator ti = (--spec.Rmap.end())->second; 
 		t.setx(ti->x());
 		t.setz(ti->z());
 		ti--;
@@ -111,63 +106,94 @@ Point GSA(std::function<double(double)> foo, double a, double b, double r = 2, d
 	return res;
 }
 
+double foo0(double x)
+{
+	volatile double a = 1;
+	for (size_t i = 0; i < 10000000; i++)
+		a *= sin(x) * sin(x) + cos(x) * cos(x);
+	return sin(x) + sin(10 * x / 3) * a;
+}
+
 double foo1(double x)
 {
-	return sin(x) + sin(10 * x / 3);
+	volatile double a = 1;
+	for (size_t i = 0; i < 10000000; i++)
+		a *= sin(x) * sin(x) + cos(x) * cos(x);
+	return 2 * (x - 3) * (x - 3) + exp(x * x / 2) * a;
 }
 
 double foo2(double x)
 {
-	return 2 * (x - 3) * (x - 3) + exp(x * x / 2);
-}
-
-double foo3(double x)
-{
+	volatile double a = 1;
+	for (size_t i = 0; i < 10000000; i++)
+		a *= sin(x) * sin(x) + cos(x) * cos(x);
 	double res = 0;
 	for (int k = 1; k <= 5; k++)
 	{
 		res += k * sin((k + 1) * x + k);
 	}
-	return (-1) * res;
+	return (-1) * res * a;
+}
+
+double foo3(double x)
+{
+	volatile double a = 1;
+	for (size_t i = 0; i < 10000000; i++)
+		a *= sin(x) * sin(x) + cos(x) * cos(x);
+	return (3 * x - 1.4) * sin(18 * x) * a;
 }
 
 double foo4(double x)
 {
-	return (3 * x - 1.4) * sin(18 * x);
+	volatile double a = 1;
+	for (size_t i = 0; i < 10000000; i++)
+		a *= sin(x) * sin(x) + cos(x) * cos(x);
+	return (-1) * (x + sin(x)) * exp((-1) * x * x) * a;
 }
 
 double foo5(double x)
 {
-	return (-1) * (x + sin(x)) * exp((-1) * x * x);
+	volatile double a = 1;
+	for (size_t i = 0; i < 10000000; i++)
+		a *= sin(x) * sin(x) + cos(x) * cos(x);
+	return sin(x) + sin(10 * x / 3) + log(x) - 0.84 * x + 3 * a;
 }
 
 double foo6(double x)
 {
-	return sin(x) + sin(10 * x / 3) + log(x) - 0.84 * x + 3;
+	volatile double a = 1;
+	for (size_t i = 0; i < 10000000; i++)
+		a *= sin(x) * sin(x) + cos(x) * cos(x);
+	return (-1) * sin(2 * M_PI * x) * exp((-1) * x) * a;
 }
 
 double foo7(double x)
 {
-	return (-1) * sin(2 * M_PI * x) * exp((-1) * x);
+	volatile double a = 1;
+	for (size_t i = 0; i < 10000000; i++)
+		a *= sin(x) * sin(x) + cos(x) * cos(x);
+	return (x * x - 5 * x + 6) / (x * x + 1) * a;
 }
 
 double foo8(double x)
 {
-	return (x * x - 5 * x + 6) / (x * x + 1);
+	volatile double a = 1;
+	for (size_t i = 0; i < 10000000; i++)
+		a *= sin(x) * sin(x) + cos(x) * cos(x);
+	return (-1) * x + sin(3 * x) - 1 * a;
 }
 
-double foo9(double x)
-{
-	return (-1) * x + sin(3 * x) - 1;
-}
+std::vector<std::vector<double>> bounds = { {2.7, 7.5}, {-3.0, 3.0},  {0.0, 10.0}, {0.0, 12.0}, 
+	{-10.0, 10.0}, {2.7, 7.5}, {0.0, 4.0}, {-5.0, 5.0}, {0.0, 6.5} };
 
 int main(int argc, char* argv[])
 {
-	std::vector<std::function<double(double)>> functions({ foo1, foo2, foo3, foo4, foo5, foo6, foo7, foo8, foo9 });
+	std::vector<std::function<double(double)>> functions({ foo0, foo1, foo2, foo3, foo4, foo5, foo6, foo7, foo8 });
 	Point point;
-	std::function<double(double)> foo = foo1;
-	double a = -3;
-	double b = 3;
+	int f = 0;
+	std::function<double(double)> foo = functions[f];
+	double a = bounds[f][0];
+	double b = bounds[f][1];
 	if (argc > 1)
 	{
 		for (int i = 1; i < argc; i++)
@@ -181,26 +207,17 @@ int main(int argc, char* argv[])
 						j++;
 					int k = atoi(&argv[i][++j]) - 1;
 					foo = functions[k];
-				}
-				if (argv[i][1] == 'a')
-				{
-					int j = 1;
-					while (argv[i][j] != '=')
-						j++;
-					a = atof(&argv[i][++j]);
-				}
-				if (argv[i][1] == 'b')
-				{
-					int j = 1;
-					while (argv[i][j] != '=')
-						j++;
-					b = atof(&argv[i][++j]);
+					a = bounds[k][0];
+					b = bounds[k][1];
 				}
 			}
 		}
 	}
-	point = GSA(foo2, a, b, 2);
-	std::cout << "x = " << point.x() << std::endl << "z = " << point.z();
+	double st = omp_get_wtime();
+	point = GSA(foo, a, b, 2.5, 0.01, 10000);
+	double en = omp_get_wtime();
+	std::cout << "time omp = " << en - st << std::endl;
+	std::cout << "x = " << point.x() << std::endl << "z = " << point.z() << std::endl;
+	std::cout << "n = " << n << std::endl;
 	return 0;
 }
-
