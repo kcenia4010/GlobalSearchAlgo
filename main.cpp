@@ -319,7 +319,7 @@ double foo8(double x)
 	return (-1) * x + sin(3 * x) - 1 * a;
 }
 
-std::vector<std::vector<double>> bounds = { {2.7, 7.5}, {-3.0, 3.0},  {0.0, 10.0}, {0.0, 12.0},
+std::vector<std::vector<double>> bounds = { {2.7, 7.5}, {-3.0, 3.0},  {0.0, 10.0}, {0.0, 1.2},
 	{-10.0, 10.0}, {2.7, 7.5}, {0.0, 4.0}, {-5.0, 5.0}, {0.0, 6.5} };
 
 int main(int argc, char* argv[])
