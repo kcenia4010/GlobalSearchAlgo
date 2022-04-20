@@ -8,6 +8,7 @@
 #include <omp.h>
 
 #define M_PI           3.14159265358979323846 
+#define NUM_ITER 10000000
 
 class Point
 {
@@ -245,7 +246,7 @@ Point GSA(std::function<double(double)> foo, double a, double b, double r = 2, d
 double foo0(double x)
 {
 	volatile double a = 1;
-	for (size_t i = 0; i < 10000000; i++)
+	for (size_t i = 0; i < NUM_ITER; i++)
 		a *= sin(x) * sin(x) + cos(x) * cos(x);
 	return sin(x) + sin(10 * x / 3) * a;
 }
@@ -253,7 +254,7 @@ double foo0(double x)
 double foo1(double x)
 {
 	volatile double a = 1;
-	for (size_t i = 0; i < 10000000; i++)
+	for (size_t i = 0; i < NUM_ITER; i++)
 		a *= sin(x) * sin(x) + cos(x) * cos(x);
 	return 2 * (x - 3) * (x - 3) + exp(x * x / 2) * a;
 }
@@ -261,7 +262,7 @@ double foo1(double x)
 double foo2(double x)
 {
 	volatile double a = 1;
-	for (size_t i = 0; i < 10000000; i++)
+	for (size_t i = 0; i < NUM_ITER; i++)
 		a *= sin(x) * sin(x) + cos(x) * cos(x);
 	double res = 0;
 	for (int k = 1; k <= 5; k++)
@@ -274,7 +275,7 @@ double foo2(double x)
 double foo3(double x)
 {
 	volatile double a = 1;
-	for (size_t i = 0; i < 10000000; i++)
+	for (size_t i = 0; i < NUM_ITER; i++)
 		a *= sin(x) * sin(x) + cos(x) * cos(x);
 	return (3 * x - 1.4) * sin(18 * x) * a;
 }
@@ -282,7 +283,7 @@ double foo3(double x)
 double foo4(double x)
 {
 	volatile double a = 1;
-	for (size_t i = 0; i < 10000000; i++)
+	for (size_t i = 0; i < NUM_ITER; i++)
 		a *= sin(x) * sin(x) + cos(x) * cos(x);
 	return (-1) * (x + sin(x)) * exp((-1) * x * x) * a;
 }
@@ -290,7 +291,7 @@ double foo4(double x)
 double foo5(double x)
 {
 	volatile double a = 1;
-	for (size_t i = 0; i < 10000000; i++)
+	for (size_t i = 0; i < NUM_ITER; i++)
 		a *= sin(x) * sin(x) + cos(x) * cos(x);
 	return sin(x) + sin(10 * x / 3) + log(x) - 0.84 * x + 3 * a;
 }
@@ -298,7 +299,7 @@ double foo5(double x)
 double foo6(double x)
 {
 	volatile double a = 1;
-	for (size_t i = 0; i < 10000000; i++)
+	for (size_t i = 0; i < NUM_ITER; i++)
 		a *= sin(x) * sin(x) + cos(x) * cos(x);
 	return (-1) * sin(2 * M_PI * x) * exp((-1) * x) * a;
 }
@@ -306,7 +307,7 @@ double foo6(double x)
 double foo7(double x)
 {
 	volatile double a = 1;
-	for (size_t i = 0; i < 10000000; i++)
+	for (size_t i = 0; i < NUM_ITER; i++)
 		a *= sin(x) * sin(x) + cos(x) * cos(x);
 	return (x * x - 5 * x + 6) / (x * x + 1) * a;
 }
@@ -314,7 +315,7 @@ double foo7(double x)
 double foo8(double x)
 {
 	volatile double a = 1;
-	for (size_t i = 0; i < 10000000; i++)
+	for (size_t i = 0; i < NUM_ITER; i++)
 		a *= sin(x) * sin(x) + cos(x) * cos(x);
 	return (-1) * x + sin(3 * x) - 1 * a;
 }
@@ -349,11 +350,15 @@ int main(int argc, char* argv[])
 			}
 		}
 	}
-	double st = omp_get_wtime();
-	point = GSA(foo, a, b, 2.5, 0.01, 10000);
-	double en = omp_get_wtime();
-	std::cout << "time omp = " << en - st << std::endl;
-	std::cout << "x = " << point.x() << std::endl << "z = " << point.z() << std::endl;
-	std::cout << "n = " << n << std::endl;
+	for (f = 0; f < 9; f++) {
+		n = 0;
+		std::cout << "function" << f << std::endl;
+		double st = omp_get_wtime();
+		point = GSA(functions[f], bounds[f][0], bounds[f][1], 2.5, 0.01, 10000);
+		double en = omp_get_wtime();
+		std::cout << "time omp = " << en - st << std::endl;
+		std::cout << "x = " << point.x() << std::endl << "z = " << point.z() << std::endl;
+		std::cout << "n = " << n << std::endl << std::endl;
+	}
 	return 0;
 }
