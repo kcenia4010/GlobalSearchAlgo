@@ -1,3 +1,4 @@
+
 #include <math.h>
 #include <iostream>
 #include <map>
@@ -9,10 +10,8 @@
 #include <omp.h>
 #include "grishagin_function.h"
 
-#define _CRT_SECURE_NO_WARNINGS
-
 #define M_PI           3.14159265358979323846
-#define NUM_ITER 10000000
+#define NUM_ITER 1000000
 
 class Point
 {
@@ -44,6 +43,13 @@ struct Result {
 	Result(size_t N = 2) : f(0.0) { y.resize(N); }
 };
 
+double Calculate(vagrish::GrishaginFunction& foo, const double* y) {
+	volatile double a = 1;
+	for (size_t i = 0; i < NUM_ITER; i++)
+		a *= sin(y[0]) * sin(y[0]) + cos(y[0]) * cos(y[0]);
+	return foo.Calculate(y) * a;
+}
+
 void GSA(vagrish::GrishaginFunction& foo, double* a, double* b, double r, double epsilon, int N, int NMax, Result& point, int& num_iter)
 {
 	TEvolvent evolvent(N, 10);
@@ -55,10 +61,10 @@ void GSA(vagrish::GrishaginFunction& foo, double* a, double* b, double r, double
 	double A = a[0], B = b[0];
 	evolvent.GetImage(A, y1.data());
 	evolvent.GetImage(B, y2.data());
-	w.insert(Point(A, foo.Calculate(y1.data())));
-	w.insert(Point(B, foo.Calculate(y2.data())));
-	Point t(B, foo.Calculate(y2.data()));
-	Point t_1(A, foo.Calculate(y1.data()));
+	w.insert(Point(A, Calculate(foo, y1.data())));
+	w.insert(Point(B, Calculate(foo, y2.data())));
+	Point t(B, Calculate(foo, y2.data()));
+	Point t_1(A, Calculate(foo, y1.data()));
 	result.f = (t_1.z() < t.z()) ? t_1.z() : t.z();
 	Spec spec;
 	double M = abs((t.z() - t_1.z()) / (B - A));
@@ -75,7 +81,7 @@ void GSA(vagrish::GrishaginFunction& foo, double* a, double* b, double r, double
 
 		double x = 0.5 * (t.x() + t_1.x()) - (t.z() - t_1.z()) / (2 * m);
 		evolvent.GetImage(x, newY.data());
-		double z = foo.Calculate(newY.data());
+		double z = Calculate(foo, newY.data());
 		if (z < result.f) {
 			result.f = z;
 			for (int i = 0; i < N; ++i) {
@@ -260,12 +266,12 @@ int main(int argc, char* argv[])
 	std::vector<double> b(2);
 	int N = 2;
 	vagrish::GrishaginFunction func;
-	for (int i = 1; i < 101; i++) {
+	for (int i = 1; i < 6; i++) {
 		num_iter = 0;
 		func.SetFunctionNumber(i);
 		func.GetBounds(a.data(), b.data());
 		double st = omp_get_wtime();
-		Result res = GlobalSearchAlgo(func, a.data(), b.data(), 2.5, 0.01, N, 10000);
+		Result res = GlobalSearchAlgo(func, a.data(), b.data(), 11.5, 0.01, N, 10000);
 		double en = omp_get_wtime();
 		std::cout << "func " << i << std::endl;
 		std::cout << "time omp = " << en - st << std::endl;
@@ -278,7 +284,7 @@ int main(int argc, char* argv[])
 		std::cout << std::endl << std::endl;
 		double* point = new double[2];
 		func.GetOptimumPoint(point);
-		if ((func.GetOptimumValue() - res.f > 0.1)) 
+		if ((func.GetOptimumValue() - res.f > 0.1))
 		{
 			std::cout << "fail in " << i << " res.f = " << res.f << std::endl;
 			std::cout << "res.y = " << res.y[0] << " " << res.y[1] << std::endl;
