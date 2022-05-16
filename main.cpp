@@ -10,7 +10,7 @@
 #include <omp.h>
 
 #define M_PI           3.14159265358979323846
-#define NUM_ITER 10000000
+#define NUM_ITER 1000000
 
 class Point
 {
@@ -42,6 +42,14 @@ struct Result {
 	double f;
 	Result(size_t N) : f(0.0) { y.resize(N); }
 };
+
+double Calculate(vagrish::GrishaginFunction& foo, const double* y) {
+	volatile double a = 1;
+	for (size_t i = 0; i < NUM_ITER; i++)
+		a *= sin(y[0]) * sin(y[0]) + cos(y[0]) * cos(y[0]);
+	return foo.Calculate(y) * a;
+}
+
 Result GSA(vagrish::GrishaginFunction& foo, double* a, double* b, double r = 2.0, double epsilon = 0.001, int N = 2, int NMax = 1000)
 {
 	TEvolvent evolvent(N, 10);
@@ -53,10 +61,10 @@ Result GSA(vagrish::GrishaginFunction& foo, double* a, double* b, double r = 2.0
 	double A = 0.0, B = 1.0;
 	evolvent.GetImage(A, y1.data());
 	evolvent.GetImage(B, y2.data());
-	w.insert(Point(A, foo.Calculate(y1.data())));
-	w.insert(Point(B, foo.Calculate(y2.data())));
-	Point t(B, foo.Calculate(y2.data()));
-	Point t_1(A, foo.Calculate(y1.data()));
+	w.insert(Point(A, Calculate(foo, y1.data())));
+	w.insert(Point(B, Calculate(foo, y2.data())));
+	Point t(B, Calculate(foo, y2.data()));
+	Point t_1(A, Calculate(foo, y1.data()));
 	result.f = (t_1.z() < t.z()) ? t_1.z() : t.z();
 	Spec spec;
 	double M = abs((t.z() - t_1.z()) / (B - A));
@@ -72,7 +80,7 @@ Result GSA(vagrish::GrishaginFunction& foo, double* a, double* b, double r = 2.0
 
 		double x = 0.5 * (t.x() + t_1.x()) - (t.z() - t_1.z()) / (2 * m);
 		evolvent.GetImage(x, newY.data());
-		double z = foo.Calculate(newY.data());
+		double z = Calculate(foo, newY.data());
 		if (z < result.f) {
 			result.f = z;
 			for (int i = 0; i < N; ++i) {
@@ -221,19 +229,19 @@ int main(int argc, char* argv[])
 	std::vector<double> b(2);
 	int N = 2;
 	vagrish::GrishaginFunction func;
-	for (int i = 1; i < 101; i++) {
+	for (int i = 1; i < 6; i++) {
 		n = 0;
 		func.SetFunctionNumber(i);
 		func.GetBounds(a.data(), b.data());
 		double st = omp_get_wtime();
-		Result res = GSA(func, a.data(), b.data(), 2.5, 0.001, 2, 10000);
+		Result res = GSA(func, a.data(), b.data(), 11.5, 0.01, 2, 10000);
 		double en = omp_get_wtime();
 		std::cout << "func " << i << std::endl;
 		std::cout << "time omp = " << en - st << std::endl;
 		std::cout << " n = " << n << std::endl;
 		std::cout << "f = " << res.f << std::endl;
 		std::cout << "y = ";
-		for (int i = 0; i < N; i++) { 
+		for (int i = 0; i < N; i++) {
 			std::cout << res.y[i] << " ";
 		}
 		std::cout << std::endl << std::endl;
