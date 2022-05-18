@@ -234,7 +234,7 @@ int main(int argc, char* argv[])
 		func.SetFunctionNumber(i);
 		func.GetBounds(a.data(), b.data());
 		double st = omp_get_wtime();
-		Result res = GSA(func, a.data(), b.data(), 11.5, 0.01, 2, 10000);
+		Result res = GSA(func, a.data(), b.data(), 2.5, 0.01, 2, 10000);
 		double en = omp_get_wtime();
 		std::cout << "func " << i << std::endl;
 		std::cout << "time omp = " << en - st << std::endl;
