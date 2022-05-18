@@ -140,6 +140,9 @@ void search(std::pair<double, std::pair<std::set<Point>::iterator, std::set<Poin
 	Point t_1 = *R.second.first;
 	std::vector<double> newY(2);
 	double x = 0.5 * (t.x() + t_1.x()) - (t.z() - t_1.z()) / (2 * m);
+	if ((x < 0) || (x > 1)) {
+		x = 0.5 * (t.x() + t_1.x());
+	}
 	evolvent.GetImage(x, newY.data());
 	double z = Calculate(foo, newY.data());
 	new_point = Point(x, z);
@@ -197,7 +200,7 @@ Result GSA(vagrish::GrishaginFunction& foo, double* a, double* b, double r = 2, 
 	double m = (M > 0) ? r * M : 1;
 	double R = (m * (B - A)) + ((t.z() - t_1.z()) * (t.z() - t_1.z()) / (m * (B - A))) - 2 * (t.z() + t_1.z());
 	spec.Rmap.insert(std::make_pair(R, std::make_pair(w.begin(), ++w.begin())));
-	int n_thread = 4;
+	int n_thread = 2;
 	double* prevM = new double[n_thread];
 	double* prevR = new double[n_thread];
 	double* newM1 = new double[n_thread];
@@ -381,7 +384,7 @@ int main(int argc, char* argv[])
 		func.SetFunctionNumber(i);
 		func.GetBounds(a.data(), b.data());
 		double st = omp_get_wtime();
-		Result res = GSA(func, a.data(), b.data(), 11.5, 0.01, N, 10000);
+		Result res = GSA(func, a.data(), b.data(), 2.5, 0.01, N, 10000);
 		double en = omp_get_wtime();
 		std::cout << "func " << i << std::endl;
 		std::cout << "time omp = " << en - st << std::endl;
