@@ -1,4 +1,3 @@
-
 #include <math.h>
 #include <iostream>
 #include <map>
@@ -144,7 +143,7 @@ void GSA(vagrish::GrishaginFunction& foo, double* a, double* b, double r, double
 double num_iter;
 Result GlobalSearchAlgo(vagrish::GrishaginFunction& foo, double* a, double* b, double r = 2, double epsilon = 0.00001, int N = 2, int NMax = 10000)
 {
-	int n_thread = 4;
+	int n_thread = 2;
 	std::vector<int> num_iters(n_thread);
 	std::vector<std::thread> threads(n_thread);
 	double distance = abs(b[0] - a[0]);
@@ -271,7 +270,7 @@ int main(int argc, char* argv[])
 		func.SetFunctionNumber(i);
 		func.GetBounds(a.data(), b.data());
 		double st = omp_get_wtime();
-		Result res = GlobalSearchAlgo(func, a.data(), b.data(), 11.5, 0.01, N, 10000);
+		Result res = GlobalSearchAlgo(func, a.data(), b.data(), 2.5, 0.01, N, 10000);
 		double en = omp_get_wtime();
 		std::cout << "func " << i << std::endl;
 		std::cout << "time omp = " << en - st << std::endl;
