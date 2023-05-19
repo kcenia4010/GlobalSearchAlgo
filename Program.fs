@@ -42,7 +42,7 @@ let recalcNewRmap (m: double) (w : List<Point>) =
     loop m 0 w Map.empty
 
 let calcRmap mset (rmap : Map<double, Point>) m M (new_elem: Point) (before_new_elem: Point) (after_new_elem: Point) (w : List<Point>) r =
-    if (M = List.max mset) then 
+    if (M = Set.maxElement mset) then 
         let dmp = rmap |> Map.remove (m * (after_new_elem.X - before_new_elem.X) + 
          (after_new_elem.Z - before_new_elem.Z) * (after_new_elem.Z - before_new_elem.Z) / 
          (m * (after_new_elem.X - before_new_elem.X)) - 2.0 * (after_new_elem.Z + before_new_elem.Z))
@@ -51,7 +51,7 @@ let calcRmap mset (rmap : Map<double, Point>) m M (new_elem: Point) (before_new_
         let dmp3 = dmp |> Map.add dmp_R after_new_elem
         dmp3 |> Map.add dmp_R2 new_elem, M, m
     else 
-        let newM = List.max mset
+        let newM = Set.maxElement mset
         let newm = calc_m newM r
         recalcNewRmap newm w, newM, newm
 
@@ -64,20 +64,19 @@ let mainFunction (PairOfPoints: PairOfPoints) m M mset (rmap: Map<double, Point>
     let new_elem = w_new |> List.item new_elem_idx
     let before_new_elem = w_new |> List.item (new_elem_idx - 1)
     let after_new_elem = w_new |> List.item (new_elem_idx + 1)
-    let Mset_new : List<double> = 
-        (mset |> List.filter (fun x -> x <> abs ((after_new_elem.Z - before_new_elem.Z) / (after_new_elem.X - before_new_elem.X)))) 
-        |> List.append [abs ((after_new_elem.Z - new_elem.Z) / (after_new_elem.X - new_elem.X));
-        abs ((new_elem.Z - before_new_elem.Z) / (new_elem.X - before_new_elem.X))]
+    let Mset_new : Set<double> = 
+        mset |> Set.remove (abs ((after_new_elem.Z - before_new_elem.Z) / (after_new_elem.X - before_new_elem.X)))
+        |> Set.add (abs ((after_new_elem.Z - new_elem.Z) / (after_new_elem.X - new_elem.X)))
+        |> Set.add (abs ((new_elem.Z - before_new_elem.Z) / (new_elem.X - before_new_elem.X)))
     let (new_rmap : Map<double, Point>, newM, newm) = calcRmap Mset_new rmap m M new_elem before_new_elem after_new_elem w_new r
-    let max_R  = (new_rmap |> Map.toList) |> List.map fst |> List.max
-    let new_t = new_rmap |> Map.find max_R
+    let max_R, new_t = Map.maxKeyValue new_rmap
     let idx = w_new |> List.findIndex (fun (x) -> (x : Point).X = new_t.X)
     let new_t_1 = w_new |> List.item (idx - 1)
     new PairOfPoints(new_t, new_t_1), w_new, newM, newm, new_rmap, Mset_new, new_res
 
 
 let rec iter (PairOfPoints: PairOfPoints) epsilon n nmax m M mset rmap w res r foo = 
-    if PairOfPoints.T.X - PairOfPoints.T_1.X <= epsilon or n > nmax then 
+    if PairOfPoints.T.X - PairOfPoints.T_1.X <= epsilon or n >= nmax then 
         n, res
     else 
         let (PairOfPoints2: PairOfPoints, new_w, newM, new_m, new_rmap, new_mset, new_res) = mainFunction PairOfPoints m M mset rmap w res r foo
@@ -88,7 +87,7 @@ let GSA foo a b r epsilon nmax =
     let point_b = new Point(b, foo b)
     let w = [point_a; point_b]   
     let M = abs ((foo b - foo a) / (b - a))
-    let Mset = [M]
+    let Mset = Set.empty.Add(M)
     let m = calc_m M r
     let R = m * (b - a) + (foo b - foo a) * (foo b - foo a) / (m * (b - a)) - 2.0 * (foo b + foo a)
     let Rset = Map.empty.Add(R, point_b)
@@ -125,19 +124,35 @@ let GSA_parallel_v1 foo (a:double) (b:double) r epsilon (nmax: int)  =
     )
     findMax (result_n) result_n.[0] 0, findMin (result_points) result_points.[0] 0
 
-let foo0 x = sin x + sin (10.0 * x / 3.0) * slow_down 1.0 0.0// 2.7 7.5 // res.X  = 5.148005, res.Z = -1.899569
-let foo1 x = 2.0 * (x - 3.0) * (x - 3.0) + exp (x * x / 2.0) * slow_down 1.0 0.0// -3.0 3.0 // res.X  = 1.589118, res.Z = 7.515945
-let foo2 x = -1.0 * (1.0 * sin ((1.0 + 1.0) * x + 1.0) + 
+let foo0 x = sin x + sin (10.0 * x / 3.0) // 2.7 7.5 // res.X  = 5.148005, res.Z = -1.899569
+let foo1 x = 
+    //System.Threading.Thread.Sleep(20)
+    2.0 * (x - 3.0) * (x - 3.0) + exp (x * x / 2.0)// -3.0 3.0 // res.X  = 1.589118, res.Z = 7.515945
+let foo2 x = 
+    //System.Threading.Thread.Sleep(20)
+    -1.0 * (1.0 * sin ((1.0 + 1.0) * x + 1.0) + 
     2.0 * sin ((2.0 + 1.0) * x + 2.0) + 
     3.0 * sin ((3.0 + 1.0) * x + 3.0) +
     4.0 * sin ((4.0 + 1.0) * x + 4.0) + 
-    5.0 * sin ((5.0 + 1.0) * x + 5.0)) * slow_down 1.0 0.0  // 0.0 10.0 // res.X  = 5.793274, res.Z = -12.030911
-let foo3 x = (3.0 * x - 1.4) * sin (18.0 * x) * slow_down 1.0 0.0 // 0.0 1.2 // res.X  = 0.967300, res.Z = -1.488708
-let foo4 x = -1.0 * (x + sin x) * exp (-1.0 * x * x) * slow_down 1.0 0.0 // -10.0 10.0 // res.X  = 0.682491, res.Z = -0.824224
-let foo5 x = sin x + sin (10.0 * x / 3.0) + log x - 0.84 * x + 3.0 * slow_down 1.0 0.0 // 2.7 7.5 // res.X  = 5.202703, res.Z = -1.601256
-let foo6 x = -1.0 * sin (2.0 * M_PI * x) * exp (-1.0 * x) * slow_down 1.0 0.0 // 0.0 4.0 // res.X  = 0.226858, res.Z = -0.788623
-let foo7 x = (x * x - 5.0 * x + 6.0) / (x * x + 1.0) * slow_down 1.0 0.0 // -5.0 5.0 // res.X  = 2.413894, res.Z = -0.035534
-let foo8 x = -1.0 * x + sin (3.0 * x) - 1.0 * slow_down 1.0 0.0// 0.0 6.5 // res.X  = 5.876861, res.Z = -7.815607
+    5.0 * sin ((5.0 + 1.0) * x + 5.0))  // 0.0 10.0 // res.X  = 5.793274, res.Z = -12.030911
+let foo3 x = 
+    //System.Threading.Thread.Sleep(20)
+    (3.0 * x - 1.4) * sin (18.0 * x) // 0.0 1.2 // res.X  = 0.967300, res.Z = -1.488708
+let foo4 x =
+    //System.Threading.Thread.Sleep(20)
+    -1.0 * (x + sin x) * exp (-1.0 * x * x) // -10.0 10.0 // res.X  = 0.682491, res.Z = -0.824224
+let foo5 x = 
+    //System.Threading.Thread.Sleep(20)
+    sin x + sin (10.0 * x / 3.0) + log x - 0.84 * x + 3.0 // 2.7 7.5 // res.X  = 5.202703, res.Z = -1.601256
+let foo6 x = 
+    //System.Threading.Thread.Sleep(20)
+    -1.0 * sin (2.0 * M_PI * x) * exp (-1.0 * x) // 0.0 4.0 // res.X  = 0.226858, res.Z = -0.788623
+let foo7 x = 
+    //System.Threading.Thread.Sleep(20)
+    (x * x - 5.0 * x + 6.0) / (x * x + 1.0) // -5.0 5.0 // res.X  = 2.413894, res.Z = -0.035534
+let foo8 x = 
+    //System.Threading.Thread.Sleep(20)
+    -1.0 * x + sin (3.0 * x) - 1.0// 0.0 6.5 // res.X  = 5.876861, res.Z = -7.815607
 
 let ArrayFunc = [foo0; foo1; foo2; foo3; foo4; foo5; foo6; foo7; foo8]
 let bounds = [2.7; 7.5; -3.0; 3.0; 0.0; 10.0; 0.0; 1.2; -10.0; 10.0; 2.7; 7.5; 0.0; 4.0; -5.0; 5.0; 0.0; 6.5]
@@ -147,7 +162,7 @@ let rec exec_loop i j =
     else
         printfn "function%O" i
         let timer = System.Diagnostics.Stopwatch.StartNew()
-        let (n: int, res : Point) = GSA_parallel_v1 (ArrayFunc.Item(i)) (bounds.Item(j)) (bounds.Item(j+1)) 2.5 0.01 10000
+        let (n: int, res : Point) = GSA_parallel_v1 (ArrayFunc.Item(i)) (bounds.Item(j)) (bounds.Item(j+1)) 2.5 0.00001 100000
         timer.Stop()
         printfn "n = %O" n
         printfn "elapsed = %O" timer.Elapsed
