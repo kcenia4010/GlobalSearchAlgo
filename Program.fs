@@ -2,13 +2,23 @@
 open System.Threading.Tasks
 
 type Point(x:double, z:double) =
-  member this.X = x
-  member this.Z = z
-  interface IComparable with
-     member this.CompareTo(x2: obj) =
-       if this.X <= (x2 :?> Point).X
-         then 1
-         else 0
+    member this.X = x
+    member this.Z = z
+    override this.Equals(obj: obj) =
+        match obj with
+        | :? Point as other -> this.X = other.X && this.Z = other.Z
+        | _ -> false
+    override this.GetHashCode() =
+        hash (this.X, this.Z)
+    interface System.IComparable with
+        member this.CompareTo(obj : obj) =
+            match obj with
+            | :? Point as other ->
+                if this.X < other.X then -1
+                elif this.X = other.X && this.Z = other.Z then 0
+                else 1
+            | _ -> invalidArg "obj" "The argument must be of type Point"
+
 
 type PairOfPoints(t:Point, t_1:Point) =
    member this.T = t
@@ -62,7 +72,7 @@ let recalcNewRmap (m: double) (w : List<Point>) =
     loop m 0 w Map.empty
 
 let calcRmap mset (rmap : Map<double, Point>) m M (new_elem: Point) (before_new_elem: Point) (after_new_elem: Point) (w : List<Point>) r =
-    if (M = List.max mset) then 
+    if (M = Set.maxElement mset) then 
         let dmp = rmap |> Map.remove (m * (after_new_elem.X - before_new_elem.X) + 
          (after_new_elem.Z - before_new_elem.Z) * (after_new_elem.Z - before_new_elem.Z) / 
          (m * (after_new_elem.X - before_new_elem.X)) - 2.0 * (after_new_elem.Z + before_new_elem.Z))
@@ -71,7 +81,7 @@ let calcRmap mset (rmap : Map<double, Point>) m M (new_elem: Point) (before_new_
         let dmp3 = dmp |> Map.add dmp_R after_new_elem
         dmp3 |> Map.add dmp_R2 new_elem, M, m
     else 
-        let newM: double = List.max mset
+        let newM: double = Set.maxElement mset
         let newm: double = calc_m newM r
         recalcNewRmap newm w, newM, newm
 
@@ -80,10 +90,11 @@ let insert_point_parallel (new_point: Point) m M mset (rmap: Map<double, Point>)
     let new_elem_idx = w_new |> List.findIndex (fun x -> x.X.Equals new_point.X)
     let new_elem = w_new |> List.item new_elem_idx
     let after_new_elem = w_new |> List.item (new_elem_idx + 1)
-    let Mset_new : List<double> = 
-        (mset |> List.filter (fun (x: double) -> x <> Mprev)) 
-        |> List.append [newM1; newM2]
-    if (M = List.max Mset_new) then 
+    let Mset_new : Set<double> = 
+        mset |> Set.remove (Mprev)
+        |> Set.add (newM1)
+        |> Set.add (newM2)
+    if (M = Set.maxElement Mset_new) then 
         let new_rmap: Map<double, Point>  = rmap |> Map.remove Rprev |> Map.add newR1 new_elem |> Map.add newR2 after_new_elem
         w_new, Mset_new, new_rmap
     else 
@@ -105,10 +116,10 @@ let mainFunction (PairOfPoints: PairOfPoints) (m: double) M mset (rmap: Map<doub
     let new_elem = w_new |> List.item new_elem_idx
     let before_new_elem = w_new |> List.item (new_elem_idx - 1)
     let after_new_elem = w_new |> List.item (new_elem_idx + 1)
-    let Mset_new : List<double> = 
-        (mset |> List.filter (fun x -> x <> abs ((after_new_elem.Z - before_new_elem.Z) / (after_new_elem.X - before_new_elem.X)))) 
-        |> List.append [abs ((after_new_elem.Z - new_elem.Z) / (after_new_elem.X - new_elem.X));
-        abs ((new_elem.Z - before_new_elem.Z) / (new_elem.X - before_new_elem.X))]
+    let Mset_new : Set<double> = 
+        mset |> Set.remove (abs ((after_new_elem.Z - before_new_elem.Z) / (after_new_elem.X - before_new_elem.X)))
+        |> Set.add (abs ((after_new_elem.Z - new_elem.Z) / (after_new_elem.X - new_elem.X)))
+        |> Set.add (abs ((new_elem.Z - before_new_elem.Z) / (new_elem.X - before_new_elem.X)))
     let (new_rmap : Map<double, Point>, newM, newm) = calcRmap Mset_new rmap m M new_elem before_new_elem after_new_elem w_new r
     let max_R: double  = (new_rmap |> Map.toList) |> List.map fst |> List.max
     let new_t = new_rmap |> Map.find max_R
@@ -163,7 +174,7 @@ let rec iter (PairOfPoints: PairOfPoints) epsilon n nmax m M mset rmap (w: List<
                 let (new_w, new_mset, dmp) = 
                     insert_point_parallel new_point_arr.[i] m M mset rmap w newM1_arr.[i] newM2_arr.[i] prevM_arr.[i] prevR_arr.[i] newR1_arr.[i] newR2_arr.[i]   
    
-                let newM = List.max new_mset
+                let newM = Set.maxElement new_mset
                 let new_m = calc_m newM r
                 let new_rmap = recalcNewRmap new_m new_w
                 let new_res = minOfPrevAndNewRes res new_point_arr.[i]
@@ -187,26 +198,26 @@ let GSA_parallel_v2 foo (a: double) (b: double) (r: double) (epsilon: double) (n
     let point_b = new Point(b, foo b)
     let w = [point_a; point_b]   
     let M = abs ((foo b - foo a) / (b - a))
-    let Mset = [M]
+    let Mset = Set.empty.Add(M)
     let m = calc_m M r
     let R = m * (b - a) + (foo b - foo a) * (foo b - foo a) / (m * (b - a)) - 2.0 * (foo b + foo a)
     let Rset = Map.empty.Add(R, point_b)
     let res = minOfPrevAndNewRes point_a point_b
     iter (new PairOfPoints(point_b, point_a)) epsilon 0 nmax m M Mset Rset w res r foo
 
-let foo0 x = sin x + sin (10.0 * x / 3.0) * slow_down 1.0 0.0// 2.7 7.5 // res.X  = 5.148005, res.Z = -1.899569
-let foo1 x = 2.0 * (x - 3.0) * (x - 3.0) + exp (x * x / 2.0) * slow_down 1.0 0.0// -3.0 3.0 // res.X  = 1.589118, res.Z = 7.515945
+let foo0 x = sin x + sin (10.0 * x / 3.0)// 2.7 7.5 // res.X  = 5.148005, res.Z = -1.899569
+let foo1 x = 2.0 * (x - 3.0) * (x - 3.0) + exp (x * x / 2.0)// -3.0 3.0 // res.X  = 1.589118, res.Z = 7.515945
 let foo2 x = -1.0 * (1.0 * sin ((1.0 + 1.0) * x + 1.0) + 
     2.0 * sin ((2.0 + 1.0) * x + 2.0) + 
     3.0 * sin ((3.0 + 1.0) * x + 3.0) +
     4.0 * sin ((4.0 + 1.0) * x + 4.0) + 
-    5.0 * sin ((5.0 + 1.0) * x + 5.0)) * slow_down 1.0 0.0  // 0.0 10.0 // res.X  = 5.793274, res.Z = -12.030911
-let foo3 x = (3.0 * x - 1.4) * sin (18.0 * x) * slow_down 1.0 0.0 // 0.0 1.2 // res.X  = 0.967300, res.Z = -1.488708
-let foo4 x = -1.0 * (x + sin x) * exp (-1.0 * x * x) * slow_down 1.0 0.0 // -10.0 10.0 // res.X  = 0.682491, res.Z = -0.824224
-let foo5 x = sin x + sin (10.0 * x / 3.0) + log x - 0.84 * x + 3.0 * slow_down 1.0 0.0 // 2.7 7.5 // res.X  = 5.202703, res.Z = -1.601256
-let foo6 x = -1.0 * sin (2.0 * M_PI * x) * exp (-1.0 * x) * slow_down 1.0 0.0 // 0.0 4.0 // res.X  = 0.226858, res.Z = -0.788623
-let foo7 x = (x * x - 5.0 * x + 6.0) / (x * x + 1.0) * slow_down 1.0 0.0 // -5.0 5.0 // res.X  = 2.413894, res.Z = -0.035534
-let foo8 x = -1.0 * x + sin (3.0 * x) - 1.0 * slow_down 1.0 0.0// 0.0 6.5 // res.X  = 5.876861, res.Z = -7.815607
+    5.0 * sin ((5.0 + 1.0) * x + 5.0))  // 0.0 10.0 // res.X  = 5.793274, res.Z = -12.030911
+let foo3 x = (3.0 * x - 1.4) * sin (18.0 * x) // 0.0 1.2 // res.X  = 0.967300, res.Z = -1.488708
+let foo4 x = -1.0 * (x + sin x) * exp (-1.0 * x * x) // -10.0 10.0 // res.X  = 0.682491, res.Z = -0.824224
+let foo5 x = sin x + sin (10.0 * x / 3.0) + log x - 0.84 * x + 3.0 // 2.7 7.5 // res.X  = 5.202703, res.Z = -1.601256
+let foo6 x = -1.0 * sin (2.0 * M_PI * x) * exp (-1.0 * x) // 0.0 4.0 // res.X  = 0.226858, res.Z = -0.788623
+let foo7 x = (x * x - 5.0 * x + 6.0) / (x * x + 1.0) // -5.0 5.0 // res.X  = 2.413894, res.Z = -0.035534
+let foo8 x = -1.0 * x + sin (3.0 * x) - 1.0// 0.0 6.5 // res.X  = 5.876861, res.Z = -7.815607
 
 let ArrayFunc = [foo0; foo1; foo2; foo3; foo4; foo5; foo6; foo7; foo8]
 let bounds = [2.7; 7.5; -3.0; 3.0; 0.0; 10.0; 0.0; 1.2; -10.0; 10.0; 2.7; 7.5; 0.0; 4.0; -5.0; 5.0; 0.0; 6.5]
@@ -216,7 +227,7 @@ let rec exec_loop i j =
     else
         printfn "function%O" i
         let timer = System.Diagnostics.Stopwatch.StartNew()
-        let (n: int, res : Point) = GSA_parallel_v2 (ArrayFunc.Item(i)) (bounds.Item(j)) (bounds.Item(j+1)) 2.5 0.01 10000
+        let (n: int, res : Point) = GSA_parallel_v2 (ArrayFunc.Item(i)) (bounds.Item(j)) (bounds.Item(j+1)) 2.5 0.00001 100000
         timer.Stop()
         printfn "n = %O" n
         printfn "elapsed = %O" timer.Elapsed
