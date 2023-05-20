@@ -44,10 +44,7 @@ struct Result {
 };
 
 double Calculate(vagrish::GrishaginFunction& foo, const double* y) {
-	volatile double a = 1;
-	for (size_t i = 0; i < NUM_ITER; i++)
-		a *= sin(y[0]) * sin(y[0]) + cos(y[0]) * cos(y[0]);
-	return foo.Calculate(y) * a;
+	return foo.Calculate(y);
 }
 
 Result GSA(vagrish::GrishaginFunction& foo, double* a, double* b, double r = 2.0, double epsilon = 0.001, int N = 2, int NMax = 1000)
