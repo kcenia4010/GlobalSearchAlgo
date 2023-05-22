@@ -43,10 +43,7 @@ struct Result {
 };
 
 double Calculate(vagrish::GrishaginFunction& foo, const double* y) {
-	volatile double a = 1;
-	for (size_t i = 0; i < NUM_ITER; i++)
-		a *= sin(y[0]) * sin(y[0]) + cos(y[0]) * cos(y[0]);
-	return foo.Calculate(y) * a;
+	return foo.Calculate(y);
 }
 
 void GSA(vagrish::GrishaginFunction& foo, double* a, double* b, double r, double epsilon, int N, int NMax, Result& point, int& num_iter)
@@ -143,24 +140,25 @@ void GSA(vagrish::GrishaginFunction& foo, double* a, double* b, double r, double
 double num_iter;
 Result GlobalSearchAlgo(vagrish::GrishaginFunction& foo, double* a, double* b, double r = 2, double epsilon = 0.00001, int N = 2, int NMax = 10000)
 {
-	int n_thread = 2;
+	int n_thread = 4;
 	std::vector<int> num_iters(n_thread);
 	std::vector<std::thread> threads(n_thread);
 	double distance = abs(b[0] - a[0]);
 	double start = a[0], end = a[0] + distance / n_thread;
 	std::vector<Result> points(n_thread);
+	std::vector<std::vector<double>> left_bounds(n_thread);
+	std::vector<std::vector<double>> right_bounds(n_thread);
+	for(int i = 0; i < n_thread; i++){
+		left_bounds[i].push_back(a[0]);
+		left_bounds[i].push_back(i*(distance / n_thread));
+
+		right_bounds[i].push_back(b[0]);
+		right_bounds[i].push_back((i+1)*(distance / n_thread));
+	}
 	int i = 0;
-	std::vector<double> s(N);
-	std::vector<double> e(N);
+
 	for (auto it = std::begin(threads); it != std::end(threads); ++it) {
-		s[0] = s[1] = start;
-		e[0] = e[1] = end;
-		*it = std::thread(GSA, std::ref(foo), s.data(), e.data(), r, epsilon, N, NMax / n_thread, std::ref(points[i]), std::ref(num_iters[i]));
-		start = end;
-		if (i == n_thread - 2)
-			end = b[0];
-		else
-			end += distance / n_thread;
+		*it = std::thread(GSA, std::ref(foo), left_bounds[i].data(), right_bounds[i].data(), r, epsilon, N, NMax / n_thread, std::ref(points[i]), std::ref(num_iters[i]));
 		i++;
 	}
 	for (auto&& i : threads) {
@@ -270,7 +268,7 @@ int main(int argc, char* argv[])
 		func.SetFunctionNumber(i);
 		func.GetBounds(a.data(), b.data());
 		double st = omp_get_wtime();
-		Result res = GlobalSearchAlgo(func, a.data(), b.data(), 2.5, 0.01, N, 10000);
+		Result res = GlobalSearchAlgo(func, a.data(), b.data(), 2.5, 0.0001, N, 10000);
 		double en = omp_get_wtime();
 		std::cout << "func " << i << std::endl;
 		std::cout << "time omp = " << en - st << std::endl;
@@ -283,9 +281,9 @@ int main(int argc, char* argv[])
 		std::cout << std::endl << std::endl;
 		double* point = new double[2];
 		func.GetOptimumPoint(point);
-		if ((func.GetOptimumValue() - res.f > 0.1))
+		if ((abs(func.GetOptimumValue() - res.f) > 0.1))
 		{
-			std::cout << "fail in " << i << " res.f = " << res.f << std::endl;
+			std::cout << "fail in " << i << " Optimum = " << func.GetOptimumValue() << std::endl;
 			std::cout << "res.y = " << res.y[0] << " " << res.y[1] << std::endl;
 			std::cout << std::endl << std::endl;
 		}
