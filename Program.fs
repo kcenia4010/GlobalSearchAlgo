@@ -1,17 +1,73 @@
 ﻿open System
+open System.Runtime.InteropServices
+
+[<DllImport("grishagin.dll", CallingConvention = CallingConvention.Cdecl)>]
+extern void CreateGrishaginFunction()
+
+[<DllImport("grishagin.dll", CallingConvention = CallingConvention.Cdecl)>]
+extern void MySetFunctionNumber(int i)
+
+[<DllImport("grishagin.dll", CallingConvention = CallingConvention.Cdecl)>]
+extern double GetBoundsA0()
+
+[<DllImport("grishagin.dll", CallingConvention = CallingConvention.Cdecl)>]
+extern double GetBoundsA1() 
+
+[<DllImport("grishagin.dll", CallingConvention = CallingConvention.Cdecl)>]
+extern double GetBoundsB0()
+
+[<DllImport("grishagin.dll", CallingConvention = CallingConvention.Cdecl)>]
+extern double GetBoundsB1() 
+
+[<DllImport("grishagin.dll", CallingConvention = CallingConvention.Cdecl)>]
+extern double MyCalculate(double y0, double y1)
+
+[<DllImport("grishagin.dll", CallingConvention = CallingConvention.Cdecl)>]
+extern void FreeGrishaginFunction()
+
+
+
+[<DllImport("evolvent.dll", CallingConvention = CallingConvention.Cdecl)>]
+extern void CreateEvovlent()
+
+[<DllImport("evolvent.dll", CallingConvention = CallingConvention.Cdecl)>]
+extern void SetBounds(double A0, double A1, double B0, double B1)
+
+[<DllImport("evolvent.dll", CallingConvention = CallingConvention.Cdecl)>]
+extern double GetImage0(double x)
+
+[<DllImport("evolvent.dll", CallingConvention = CallingConvention.Cdecl)>]
+extern double GetImage1(double x)
+
+[<DllImport("evolvent.dll", CallingConvention = CallingConvention.Cdecl)>]
+extern void FreeEvolvent()
+
 
 type Point(x:double, z:double) =
-  member this.X = x
-  member this.Z = z
-  interface IComparable with
-     member this.CompareTo(x2: obj) =
-       if this.X <= (x2 :?> Point).X
-         then 1
-         else 0
+    member this.X = x
+    member this.Z = z
+    override this.Equals(obj: obj) =
+        match obj with
+        | :? Point as other -> this.X = other.X && this.Z = other.Z
+        | _ -> false
+    override this.GetHashCode() =
+        hash (this.X, this.Z)
+    interface System.IComparable with
+        member this.CompareTo(obj : obj) =
+            match obj with
+            | :? Point as other ->
+                if this.X < other.X then -1
+                elif this.X = other.X && this.Z = other.Z then 0
+                else 1
+            | _ -> invalidArg "obj" "The argument must be of type Point"
 
 type PairOfPoints(t:Point, t_1:Point) =
    member this.T = t
    member this.T_1 = t_1
+
+type Result(f:double, y:List<double>) =
+    member this.Y = y
+    member this.F = f
 
 let NUM_ITER = 1000000.0
 let M_PI =3.14159265358979323846264338327950288 
@@ -25,9 +81,9 @@ let calc_m (M:double) (r:double) =
     if M > 0.0 then r*M
     else 1.0
 
-let minOfPrevAndNewRes (prev : Point) (new_p : Point) =
-    if new_p.Z < prev.Z then new_p
-    else prev
+let minOfPrevAndNewRes (prev : double) (new_p : double) (prev_y : List<double>) (new_y : List<double>) =
+    if new_p < prev then (new Result(new_p, new_y))
+    else (new Result(prev, prev_y))
 
 let recalcNewRmap (m: double) (w : List<Point>) =
     let rec loop (m: double) (i: int) (w : List<Point>) (rmap: Map<double,Point>) = 
@@ -54,10 +110,11 @@ let calcRmap mset (rmap : Map<double, Point>) m M (new_elem: Point) (before_new_
         let newm = calc_m newM r
         recalcNewRmap newm w, newM, newm
 
-let mainFunction (PairOfPoints: PairOfPoints) m M mset (rmap: Map<double, Point>) (w : List<Point>) res r foo =
+let mainFunction (PairOfPoints: PairOfPoints) m M mset (rmap: Map<double, Point>) (w : List<Point>) (res : Result) r =
     let x = 0.5 * (PairOfPoints.T.X + PairOfPoints.T_1.X) -  (PairOfPoints.T.Z - PairOfPoints.T_1.Z) / (2.0 * m)
-    let new_point = new Point(x, foo x)
-    let new_res = minOfPrevAndNewRes res new_point
+    let new_y = [GetImage0(x);GetImage1(x)]
+    let new_point = new Point(x, MyCalculate((new_y.Item(0)), (new_y.Item(1))))
+    let new_res : Result = minOfPrevAndNewRes res.F new_point.Z res.Y new_y
     let w_new = (List.append w [new_point]) |> List.sortBy (fun elem -> elem.X)
     let new_elem_idx = w_new |> List.findIndex (fun x -> x.X.Equals new_point.X) 
     let new_elem = w_new |> List.item new_elem_idx
@@ -73,52 +130,49 @@ let mainFunction (PairOfPoints: PairOfPoints) m M mset (rmap: Map<double, Point>
     let new_t_1 = w_new |> List.item (idx - 1)
     new PairOfPoints(new_t, new_t_1), w_new, newM, newm, new_rmap, Mset_new, new_res
 
-let rec iter (PairOfPoints: PairOfPoints) epsilon n nmax m M mset rmap w res r foo = 
+let rec iter (PairOfPoints: PairOfPoints) epsilon n nmax m M mset rmap w res r = 
     if PairOfPoints.T.X - PairOfPoints.T_1.X <= epsilon or n > nmax then 
         n, res
     else 
-        let (PairOfPoints2: PairOfPoints, new_w, newM, new_m, new_rmap, new_mset, new_res) = mainFunction PairOfPoints m M mset rmap w res r foo
-        iter PairOfPoints2 epsilon (n+1) nmax new_m newM new_mset new_rmap new_w new_res r foo
+        let (PairOfPoints2: PairOfPoints, new_w, newM, new_m, new_rmap, new_mset, new_res) = mainFunction PairOfPoints m M mset rmap w res r
+        iter PairOfPoints2 epsilon (n+1) nmax new_m newM new_mset new_rmap new_w new_res r
 
-let GSA foo a b r epsilon nmax =
-    let point_a = new Point(a, foo a)
-    let point_b = new Point(b, foo b)
+let GSA (Abounds : List<double>) (Bbounds : List<double>) (r : double) (epsilon : double) (nmax : int) =
+    CreateEvovlent()
+    SetBounds((Abounds.Item(0)), (Abounds.Item(1)), (Bbounds.Item(0)), (Bbounds.Item(1)))
+    let A = 0.0
+    let B = 1.0
+    let y1 = [GetImage0(A);GetImage1(A)]
+    let y2 = [GetImage0(B);GetImage1(B)]
+    let point_a = new Point(A, MyCalculate((y1.Item(0)), (y1.Item(1))))
+    let point_b = new Point(B, MyCalculate((y2.Item(0)), (y2.Item(1))))
     let w = [point_a; point_b]   
-    let M = abs ((foo b - foo a) / (b - a))
+    let M = abs ((point_b.Z - point_a.Z) / (B - A))
     let Mset = Set.empty.Add(M)
     let m = calc_m M r
-    let R = m * (b - a) + (foo b - foo a) * (foo b - foo a) / (m * (b - a)) - 2.0 * (foo b + foo a)
+    let R = m * (B - A) + (point_b.Z - point_a.Z) * (point_b.Z - point_a.Z) / (m * (B - A)) - 2.0 * (point_b.Z + point_a.Z)
     let Rset = Map.empty.Add(R, point_b)
-    let res = minOfPrevAndNewRes point_a point_b
-    iter (new PairOfPoints(point_b, point_a)) epsilon 0 nmax m M Mset Rset w res r foo
-
-let foo0 x = sin x + sin (10.0 * x / 3.0)// 2.7 7.5 // res.X  = 5.148005, res.Z = -1.899569
-let foo1 x = 2.0 * (x - 3.0) * (x - 3.0) + exp (x * x / 2.0)// -3.0 3.0 // res.X  = 1.589118, res.Z = 7.515945
-let foo2 x = -1.0 * (1.0 * sin ((1.0 + 1.0) * x + 1.0) + 
-    2.0 * sin ((2.0 + 1.0) * x + 2.0) + 
-    3.0 * sin ((3.0 + 1.0) * x + 3.0) +
-    4.0 * sin ((4.0 + 1.0) * x + 4.0) + 
-    5.0 * sin ((5.0 + 1.0) * x + 5.0))  // 0.0 10.0 // res.X  = 5.793274, res.Z = -12.030911
-let foo3 x = (3.0 * x - 1.4) * sin (18.0 * x) // 0.0 1.2 // res.X  = 0.967300, res.Z = -1.488708
-let foo4 x = -1.0 * (x + sin x) * exp (-1.0 * x * x) // -10.0 10.0 // res.X  = 0.682491, res.Z = -0.824224
-let foo5 x = sin x + sin (10.0 * x / 3.0) + log x - 0.84 * x + 3.0 // 2.7 7.5 // res.X  = 5.202703, res.Z = -1.601256
-let foo6 x = -1.0 * sin (2.0 * M_PI * x) * exp (-1.0 * x) // 0.0 4.0 // res.X  = 0.226858, res.Z = -0.788623
-let foo7 x = (x * x - 5.0 * x + 6.0) / (x * x + 1.0) // -5.0 5.0 // res.X  = 2.413894, res.Z = -0.035534
-let foo8 x = -1.0 * x + sin (3.0 * x) - 1.0// 0.0 6.5 // res.X  = 5.876861, res.Z = -7.815607
-
-let ArrayFunc = [foo0; foo1; foo2; foo3; foo4; foo5; foo6; foo7; foo8]
-let bounds = [2.7; 7.5; -3.0; 3.0; 0.0; 10.0; 0.0; 1.2; -10.0; 10.0; 2.7; 7.5; 0.0; 4.0; -5.0; 5.0; 0.0; 6.5]
+    let res : Result = minOfPrevAndNewRes point_a.Z point_b.Z y1 y2
+    iter (new PairOfPoints(point_b, point_a)) epsilon 0 nmax m M Mset Rset w res r
 
 let rec exec_loop i j =
-    if i > 8 then 0 
+    if i > 5 then 0 
     else
         printfn "function%O" i
+        MySetFunctionNumber i
+        let Abounds : List<double> = [GetBoundsA0(); GetBoundsA1()]
+        let Bbounds : List<double> = [GetBoundsB0(); GetBoundsB1()]
         let timer = System.Diagnostics.Stopwatch.StartNew()
-        let (n, res) = GSA (ArrayFunc.Item(i)) (bounds.Item(j)) (bounds.Item(j+1)) 2.5 0.0000001 10000000
+        let (n, res) = GSA Abounds Bbounds 2.5 0.00001 10000
+        FreeEvolvent()
         timer.Stop()
         printfn "n = %O" n
         printfn "elapsed = %O" timer.Elapsed
-        printfn "res.X  = %f, res.Z = %f" res.X res.Z
+        printfn "F  = %f" res.F
+        printfn "Y  = %f %f" (res.Y.Item(0)) (res.Y.Item(1))
         exec_loop (i+1) (j+2)
 
-let ret = exec_loop 0 0
+let ret = 
+    CreateGrishaginFunction()
+    exec_loop 1 2
+    FreeGrishaginFunction()
