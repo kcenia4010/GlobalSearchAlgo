@@ -43,10 +43,7 @@ struct Result {
 };
 
 double Calculate(vagrish::GrishaginFunction& foo, const double* y) {
-	volatile double a = 1;
-	for (size_t i = 0; i < NUM_ITER; i++)
-		a *= sin(y[0]) * sin(y[0]) + cos(y[0]) * cos(y[0]);
-	return foo.Calculate(y) * a;
+	return foo.Calculate(y);
 }
 
 void recalculationR(Spec& spec, std::set<Point>& w, double r, double& M, double& m) {
@@ -121,9 +118,7 @@ void insert_point_parallel(Spec& spec, std::set<Point>& w, Point point, double M
 
 	if (M == *(--spec.Mset.end()))
 	{
-		spec.Rmap.erase(m * (after_new_elem->x() - before_new_elem->x()) + (after_new_elem->z() - before_new_elem->z())
-			* (after_new_elem->z() - before_new_elem->z()) / (m * (after_new_elem->x() - before_new_elem->x()))
-			- 2 * (after_new_elem->z() + before_new_elem->z()));
+		spec.Rmap.erase(Rprev);
 
 		spec.Rmap.insert(std::make_pair(newR2, std::make_pair(new_elem, after_new_elem)));
 		spec.Rmap.insert(std::make_pair(newR1, std::make_pair(before_new_elem, new_elem)));
@@ -131,7 +126,7 @@ void insert_point_parallel(Spec& spec, std::set<Point>& w, Point point, double M
 }
 
 
-void search(std::pair<double, std::pair<std::set<Point>::iterator, std::set<Point>::iterator>> R, TEvolvent& evolvent,
+void search(std::pair<double, std::pair<std::set<Point>::iterator, std::set<Point>::iterator>> R, TEvolvent evolvent,
 	vagrish::GrishaginFunction& foo, double m, double M,
 	double& prevM, double& prevR, double& newM1, double& newM2, double& newR1, double& newR2,
 	Point& new_point, int& return_code)
@@ -147,10 +142,10 @@ void search(std::pair<double, std::pair<std::set<Point>::iterator, std::set<Poin
 	double z = Calculate(foo, newY.data());
 	new_point = Point(x, z);
 	prevM = abs((t.z() - t_1.z()) / (t.x() - t_1.x()));
+	newM1 = abs((z - t_1.z()) / (x - t_1.x()));
+	newM2 = abs((t.z() - z) / (t.x() - x));
 	if (prevM != M)
 	{
-		newM1 = abs((z - t_1.z()) / (x - t_1.x()));
-		newM2 = abs((t.z() - z) / (t.x() - x));
 		if (M >= std::max(newM1, newM2))
 		{
 			prevR = m * (t.x() - t_1.x()) + (t.z() - t_1.z()) * (t.z() - t_1.z()) / (m * (t.x() - t_1.x())) - 2 * (t.z() + t_1.z());
@@ -194,13 +189,14 @@ Result GSA(vagrish::GrishaginFunction& foo, double* a, double* b, double r = 2, 
 	Point t(B, Calculate(foo, y2.data()));
 	Point t_1(A, Calculate(foo, y1.data()));
 	result.f = (t_1.z() < t.z()) ? t_1.z() : t.z();
+	result.y = (t_1.z() < t.z()) ? y1 : y2;
 	Spec spec;
 	double M = abs((t.z() - t_1.z()) / (B - A));
 	spec.Mset.insert(M);
 	double m = (M > 0) ? r * M : 1;
 	double R = (m * (B - A)) + ((t.z() - t_1.z()) * (t.z() - t_1.z()) / (m * (B - A))) - 2 * (t.z() + t_1.z());
 	spec.Rmap.insert(std::make_pair(R, std::make_pair(w.begin(), ++w.begin())));
-	int n_thread = 2;
+	int n_thread = 4;
 	double* prevM = new double[n_thread];
 	double* prevR = new double[n_thread];
 	double* newM1 = new double[n_thread];
@@ -384,7 +380,7 @@ int main(int argc, char* argv[])
 		func.SetFunctionNumber(i);
 		func.GetBounds(a.data(), b.data());
 		double st = omp_get_wtime();
-		Result res = GSA(func, a.data(), b.data(), 2.5, 0.01, N, 10000);
+		Result res = GSA(func, a.data(), b.data(), 2.5, 0.0001, N, 10000);
 		double en = omp_get_wtime();
 		std::cout << "func " << i << std::endl;
 		std::cout << "time omp = " << en - st << std::endl;
@@ -397,10 +393,9 @@ int main(int argc, char* argv[])
 		std::cout << std::endl << std::endl;
 		double* point = new double[2];
 		func.GetOptimumPoint(point);
-		if ((func.GetOptimumValue() - res.f > 0.1))
+		if ((abs(func.GetOptimumValue() - res.f) > 0.1))
 		{
-			std::cout << "fail in " << i << " res.f = " << res.f << std::endl;
-			std::cout << "res.y = " << res.y[0] << " " << res.y[1] << std::endl;
+			std::cout << "fail in " << i << " Optimum= " << func.GetOptimumValue() << std::endl;
 			std::cout << std::endl << std::endl;
 		}
 	}
